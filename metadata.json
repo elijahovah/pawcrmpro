@@ -1,0 +1,7 @@
+{
+  "name": "PawCRM Pro",
+  "description": "A sophisticated, AI-powered CRM for pet grooming professionals featuring breed identification, automated batch intake, and business analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
