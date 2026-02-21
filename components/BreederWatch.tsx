@@ -1,27 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ShieldAlert, Search, AlertTriangle, MapPin, Flag, ChevronRight, ShieldCheck, Siren, Copy, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { analyzeBreederText } from '../services/geminiService';
-import { dataService } from '../services/dataService';
 import { BreederReport } from '../types';
+
+// Mock Database of Reports
+const MOCK_REPORTS: BreederReport[] = [
+    {
+        id: '1',
+        kennelName: 'Tiny Teacup Pups',
+        breederName: 'Unknown',
+        location: 'Miami, FL',
+        riskLevel: 'High',
+        reportCount: 12,
+        lastReported: '2 days ago',
+        flags: ['Sick puppies', 'Fake health certs', 'Ghosted after deposit', 'No visits allowed'],
+        description: 'Multiple reports of puppies arriving with Parvo. Breeder refuses refunds and blocks numbers after delivery. Photos on website are stolen.'
+    },
+    {
+        id: '2',
+        kennelName: 'Golden Valley Retrievers',
+        breederName: 'John Smith',
+        location: 'Lancaster, PA',
+        riskLevel: 'Medium',
+        reportCount: 3,
+        lastReported: '1 week ago',
+        flags: ['Kennel conditions', 'Overbreeding'],
+        description: 'Dogs appear to be kept in outdoor runs with minimal socialization. Puppies are healthy but shy/fearful. High volume breeder.'
+    },
+    {
+        id: '3',
+        kennelName: 'Exotic Frenchies 4 U',
+        breederName: 'Sarah J.',
+        location: 'Dallas, TX',
+        riskLevel: 'High',
+        reportCount: 8,
+        lastReported: '3 weeks ago',
+        flags: ['Merle fraud', 'Genetic defects', 'Cash App only'],
+        description: 'Selling "rare" colors that do not exist in breed standard. Puppies developed severe respiratory issues by 6 months. Refuses to show parents.'
+    }
+];
 
 const BreederWatch: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [scanText, setScanText] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [scanResult, setScanResult] = useState<{ riskLevel: string, summary: string, redFlags: string[], questionsToAsk: string[] } | null>(null);
-    const [reports, setReports] = useState<BreederReport[]>([]);
-    const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchReports = async () => {
-            const data = await dataService.getBreederReports();
-            setReports(data);
-            setLoading(false);
-        };
-        fetchReports();
-    }, []);
-
-    const filteredReports = reports.filter(r => 
+    const filteredReports = MOCK_REPORTS.filter(r => 
         r.kennelName.toLowerCase().includes(searchTerm.toLowerCase()) || 
         r.location.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -68,55 +93,46 @@ const BreederWatch: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                        {loading ? (
-                            <div className="text-center py-10 text-slate-400"><Loader2 className="animate-spin mx-auto mb-2"/>Loading directory...</div>
-                        ) : filteredReports.length > 0 ? (
-                            filteredReports.map(report => (
-                                <div key={report.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                                                {report.kennelName}
-                                                {report.riskLevel === 'High' && <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-[10px] uppercase font-bold rounded-full tracking-wide">High Risk</span>}
-                                                {report.riskLevel === 'Medium' && <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-[10px] uppercase font-bold rounded-full tracking-wide">Caution</span>}
-                                            </h3>
-                                            <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
-                                                <span className="flex items-center gap-1"><UserIcon size={14}/> {report.breederName}</span>
-                                                <span className="flex items-center gap-1"><MapPin size={14}/> {report.location}</span>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-xl font-bold text-rose-600">{report.reportCount}</div>
-                                            <div className="text-xs text-slate-400 font-medium uppercase">Reports</div>
+                        {filteredReports.map(report => (
+                            <div key={report.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                            {report.kennelName}
+                                            {report.riskLevel === 'High' && <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-[10px] uppercase font-bold rounded-full tracking-wide">High Risk</span>}
+                                            {report.riskLevel === 'Medium' && <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-[10px] uppercase font-bold rounded-full tracking-wide">Caution</span>}
+                                        </h3>
+                                        <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                                            <span className="flex items-center gap-1"><UserIcon size={14}/> {report.breederName}</span>
+                                            <span className="flex items-center gap-1"><MapPin size={14}/> {report.location}</span>
                                         </div>
                                     </div>
-
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {report.flags.map((flag, i) => (
-                                            <span key={i} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200">
-                                                {flag}
-                                            </span>
-                                        ))}
-                                    </div>
-
-                                    <div className="bg-slate-50 p-4 rounded-xl text-sm text-slate-700 italic border-l-4 border-rose-400">
-                                        "{report.description}"
-                                    </div>
-                                    
-                                    <div className="mt-4 flex justify-between items-center text-xs text-slate-400">
-                                        <span>Last reported: {report.lastReported}</span>
-                                        <button className="text-indigo-600 font-bold hover:underline flex items-center gap-1">
-                                            View Full Details <ChevronRight size={14} />
-                                        </button>
+                                    <div className="text-right">
+                                        <div className="text-xl font-bold text-rose-600">{report.reportCount}</div>
+                                        <div className="text-xs text-slate-400 font-medium uppercase">Reports</div>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200 text-slate-400">
-                                <ShieldCheck size={48} className="mx-auto mb-4 opacity-50" />
-                                <p>No reports found in the database.</p>
+
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {report.flags.map((flag, i) => (
+                                        <span key={i} className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200">
+                                            {flag}
+                                        </span>
+                                    ))}
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-xl text-sm text-slate-700 italic border-l-4 border-rose-400">
+                                    "{report.description}"
+                                </div>
+                                
+                                <div className="mt-4 flex justify-between items-center text-xs text-slate-400">
+                                    <span>Last reported: {report.lastReported}</span>
+                                    <button className="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+                                        View Full Details <ChevronRight size={14} />
+                                    </button>
+                                </div>
                             </div>
-                        )}
+                        ))}
                     </div>
                 </div>
 

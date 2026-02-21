@@ -10,19 +10,20 @@ import {
   Settings, 
   LogOut,
   UploadCloud,
+  ChevronRight,
   ShieldAlert,
   Menu,
   X
 } from 'lucide-react';
-import { AppView, BusinessConfig } from '../types';
+import { AppView } from '../types';
 
 interface SidebarProps {
   currentView: AppView;
   onChangeView: (view: AppView) => void;
-  config: BusinessConfig;
+  ownerName: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, config }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, ownerName }) => {
   const [isOpen, setIsOpen] = useState(false);
   
   const menuItems = [
@@ -47,10 +48,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, config }) 
 
   const handleNavClick = (view: AppView) => {
     onChangeView(view);
-    setIsOpen(false);
+    setIsOpen(false); // Close sidebar on mobile when item clicked
   };
-
-  const brandColor = config.brandColor || '#4f46e5';
 
   return (
     <>
@@ -79,30 +78,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, config }) 
       `}>
         {/* Brand */}
         <div className="p-8 flex items-center gap-3">
-          {config.logoUrl ? (
-            <img 
-                src={config.logoUrl} 
-                alt="Logo" 
-                className="w-10 h-10 rounded-xl object-contain bg-slate-50 border border-slate-100" 
-            />
-          ) : (
-            <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg"
-                style={{ backgroundColor: brandColor }}
-            >
-                <Dog size={24} />
-            </div>
-          )}
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+            <Dog size={24} />
+          </div>
           <div>
-            <h1 className="font-bold text-slate-900 text-lg tracking-tight leading-tight max-w-[150px] truncate">
-                {config.businessName}
-            </h1>
-            <p 
-                className="text-[10px] uppercase tracking-widest font-bold truncate max-w-[150px]"
-                style={{ color: brandColor }}
-            >
-                {config.brandTagline || "Pro Edition"}
-            </p>
+            <h1 className="font-bold text-slate-900 text-xl tracking-tight">PawCRM</h1>
+            <p className="text-[10px] uppercase tracking-widest text-indigo-600 font-bold">Pro Edition</p>
           </div>
         </div>
 
@@ -115,43 +96,42 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, config }) 
               onClick={() => handleNavClick(item.id)}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden hover:scale-[1.02] active:scale-[0.98]
                 ${currentView === item.id 
-                  ? 'bg-slate-50 shadow-sm' 
+                  ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-               style={{ color: currentView === item.id ? brandColor : undefined }}
             >
               <div className="flex items-center gap-3 relative z-10">
-                <span className={`${currentView === item.id ? '' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                <span className={`${currentView === item.id ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
                   {item.icon}
                 </span>
                 {item.label}
               </div>
               {currentView === item.id && (
-                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColor }}></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-600"></div>
               )}
             </button>
           ))}
 
           <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-8">Tools</p>
           
+          {/* Batch Intake */}
           <button 
             onClick={() => handleNavClick(AppView.BATCH_INTAKE)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
               ${currentView === AppView.BATCH_INTAKE 
-                ? 'bg-slate-50 border border-slate-100' 
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-            style={{ color: currentView === AppView.BATCH_INTAKE ? brandColor : undefined }}
           >
              <UploadCloud size={18} />
              <span>Batch Intake</span>
           </button>
 
+           {/* Settings */}
            <button 
             onClick={() => handleNavClick(AppView.SETTINGS)}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]
               ${currentView === AppView.SETTINGS 
-                ? 'bg-slate-50 border border-slate-100' 
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-             style={{ color: currentView === AppView.SETTINGS ? brandColor : undefined }}
           >
              <Settings size={18} />
              <span>Settings</span>
@@ -166,11 +146,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, config }) 
               className="bg-slate-50 rounded-xl p-3 flex items-center justify-between group cursor-pointer hover:bg-slate-100 transition-colors hover:scale-[1.02]"
           >
               <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-xs" style={{ color: brandColor }}>
-                      {getInitials(config.ownerName || "Jane Doe")}
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                      {getInitials(ownerName || "Jane Doe")}
                   </div>
                   <div className="text-left">
-                      <p className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{config.ownerName || "Jane Doe"}</p>
+                      <p className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{ownerName || "Jane Doe"}</p>
                       <p className="text-[10px] text-slate-500">Business Owner</p>
                   </div>
               </div>

@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { Dog, Mail, Lock, ArrowRight, User, Loader2, Check } from 'lucide-react';
 import { User as UserType } from '../types';
-import { dataService } from '../services/dataService';
 
 interface AuthProps {
-  onLogin: (user: UserType, keepSignedIn: boolean) => void;
+  onLogin: (user: UserType) => void;
 }
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -18,35 +16,19 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     businessName: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-        let userName = formData.name;
-        let userBusiness = formData.businessName;
-
-        // If logging in, attempt to fetch existing settings to populate the user session
-        if (isLogin) {
-            const settings = await dataService.getSettings();
-            if (settings) {
-                userName = settings.ownerName || 'User';
-                userBusiness = settings.businessName || 'My Business';
-            } else {
-                userName = 'User';
-                userBusiness = 'My Grooming Business';
-            }
-        }
-
-        onLogin({
-            name: userName,
-            email: formData.email,
-            businessName: userBusiness
-        }, keepSignedIn);
-    } catch (error) {
-        console.error("Login error:", error);
-        setIsLoading(false);
-    }
+    // Simulate API call
+    setTimeout(() => {
+      onLogin({
+        name: isLogin ? 'Carol Danvers' : formData.name,
+        email: formData.email,
+        businessName: isLogin ? 'PawCRM Grooming' : formData.businessName
+      });
+      setIsLoading(false);
+    }, 1500);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,19 +128,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                   />
                </div>
             </div>
-
-            {isLogin && (
-              <div className="flex items-center gap-2 mt-2">
-                 <input 
-                    type="checkbox" 
-                    id="keepSignedIn"
-                    checked={keepSignedIn}
-                    onChange={(e) => setKeepSignedIn(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                 />
-                 <label htmlFor="keepSignedIn" className="text-sm text-slate-600 cursor-pointer select-none font-medium">Keep me signed in</label>
-              </div>
-            )}
 
             <button 
               type="submit"

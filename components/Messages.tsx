@@ -1,8 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Mail, MessageSquare, Send, Users, Sparkles, Clock, CheckCircle, Smartphone, Monitor, ChevronRight, BarChart, RefreshCw, Loader2, Calendar, User, Dog } from 'lucide-react';
 import { MarketingCampaign, BusinessConfig } from '../types';
 import { generateMarketingCopy, generateAppointmentReminder } from '../services/geminiService';
-import { dataService } from '../services/dataService';
+
+// Mock History Data
+const MOCK_CAMPAIGNS: MarketingCampaign[] = [
+    {
+        id: '1',
+        name: 'Spring Shedding Special',
+        type: 'Email',
+        audience: 'Dog Owners',
+        sentDate: '2023-04-10',
+        status: 'Sent',
+        stats: { sent: 856, opened: 642, clicked: 128 }
+    },
+    {
+        id: '2',
+        name: 'Holiday Hours Update',
+        type: 'SMS',
+        audience: 'All Clients',
+        sentDate: '2023-12-20',
+        status: 'Sent',
+        stats: { sent: 1248, clicked: 980 }
+    },
+    {
+        id: '3',
+        name: 'Puppy Promo',
+        type: 'Email',
+        audience: 'Puppy Owners',
+        sentDate: '2024-01-15',
+        status: 'Scheduled',
+        stats: { sent: 0 }
+    }
+];
 
 interface MessagesProps {
     config?: BusinessConfig;
@@ -13,14 +43,12 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
     const [channel, setChannel] = useState<'Email' | 'SMS'>('SMS');
     const [audience, setAudience] = useState('All Clients');
     const [messageType, setMessageType] = useState<'BROADCAST' | 'REMINDER'>('REMINDER');
-    const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
     
     // Compose State
     const [topic, setTopic] = useState('');
     const [subject, setSubject] = useState('');
     const [content, setContent] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
-    const [sending, setSending] = useState(false);
 
     // Reminder Details State
     const [reminderDetails, setReminderDetails] = useState({
@@ -29,15 +57,6 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
         service: 'Full Groom',
         appointmentTime: 'Tomorrow at 10:00 AM'
     });
-
-    useEffect(() => {
-        loadCampaigns();
-    }, []);
-
-    const loadCampaigns = async () => {
-        const data = await dataService.getCampaigns();
-        setCampaigns(data);
-    };
 
     const handleReminderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setReminderDetails(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -67,31 +86,6 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
         if (channel === 'Email') setSubject(result.subject);
         setContent(result.content);
         setIsGenerating(false);
-    };
-
-    const handleSend = async () => {
-        if (!content) return;
-        setSending(true);
-        
-        // Save the campaign/message record
-        const newCampaign: MarketingCampaign = {
-            id: `cmp_${Date.now()}`,
-            name: messageType === 'BROADCAST' ? topic : `Reminder: ${reminderDetails.clientName}`,
-            type: channel,
-            audience: messageType === 'BROADCAST' ? audience : reminderDetails.clientName,
-            sentDate: new Date().toISOString().split('T')[0],
-            status: 'Sent',
-            stats: { sent: 1, opened: 0, clicked: 0 } // Init stats
-        };
-
-        await dataService.saveCampaign(newCampaign);
-        await loadCampaigns();
-        setSending(false);
-        setActiveTab('history');
-        // Reset form
-        setTopic('');
-        setContent('');
-        setSubject('');
     };
 
     return (
@@ -176,11 +170,11 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
                                             onChange={(e) => setAudience(e.target.value)}
                                             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 appearance-none"
                                         >
-                                            <option>All Clients</option>
-                                            <option>Dog Owners</option>
-                                            <option>Cat Owners</option>
-                                            <option>Inactive &gt; 6 Months</option>
-                                            <option>Puppy Program</option>
+                                            <option>All Clients (1,248)</option>
+                                            <option>Dog Owners (856)</option>
+                                            <option>Cat Owners (392)</option>
+                                            <option>Inactive &gt; 6 Months (145)</option>
+                                            <option>Puppy Program (85)</option>
                                         </select>
                                         <ChevronRight className="absolute right-4 top-3.5 text-slate-400 rotate-90" size={16} />
                                     </div>
@@ -278,8 +272,8 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
                             <button className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2">
                                 <Clock size={18} /> Schedule
                             </button>
-                            <button onClick={handleSend} disabled={sending} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-2">
-                                {sending ? <Loader2 className="animate-spin" size={18}/> : <Send size={18} />} Send {messageType === 'BROADCAST' ? 'Broadcast' : 'Reminder'}
+                            <button className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                                <Send size={18} /> Send {messageType === 'BROADCAST' ? 'Broadcast' : 'Reminder'}
                             </button>
                         </div>
                     </div>
@@ -379,7 +373,7 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {campaigns.length > 0 ? campaigns.map((campaign) => (
+                            {MOCK_CAMPAIGNS.map((campaign) => (
                                 <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
@@ -428,13 +422,7 @@ const Messages: React.FC<MessagesProps> = ({ config }) => {
                                         <button className="text-indigo-600 hover:text-indigo-800 font-bold text-xs">View Report</button>
                                     </td>
                                 </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic">
-                                        No campaigns sent yet. Start composing!
-                                    </td>
-                                </tr>
-                            )}
+                            ))}
                         </tbody>
                     </table>
                 </div>

@@ -26,7 +26,6 @@ export interface MetricCardProps {
   trendUp?: boolean;
   icon: React.ReactNode;
   description?: string;
-  brandColor?: string;
 }
 
 export interface ChatMessage {
@@ -35,17 +34,22 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface QuickActionProps {
+  title: string;
+  description?: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary' | 'outline';
+}
+
 export interface Appointment {
   id: string;
-  clientId?: string;
   clientName: string;
   petName: string;
   service: string;
   time: string;
   status: 'Confirmed' | 'Pending' | 'Completed';
   avatarUrl?: string;
-  notes?: string;
-  date?: string;
 }
 
 export interface NotificationPreferences {
@@ -58,19 +62,12 @@ export interface NotificationPreferences {
 }
 
 export interface BusinessConfig {
-  id?: string;
   businessName: string;
   ownerName: string;
   email: string;
   phone: string;
   address: string;
   cancellationPolicy: string;
-  
-  // Branding
-  logoUrl?: string;
-  brandColor: string;
-  brandTagline?: string;
-
   // Integrations
   calendlyUrl?: string;
   mailchimpApiKey?: string;
@@ -84,7 +81,6 @@ export interface BusinessConfig {
 export interface Pet {
   id: string;
   ownerId?: string;
-  ownerName?: string; // Denormalized for display
   name: string;
   breed: string;
   age: number;
