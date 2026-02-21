@@ -29,6 +29,7 @@ interface ParsedIntakeRow {
   notes: string;
   sourceFileName?: string;
   sourceImageDataUrl?: string;
+  qaApproved?: boolean;
 }
 
 const STORAGE_KEY = 'pawcrm_clients';
@@ -41,6 +42,7 @@ const BatchIntake: React.FC = () => {
   const [parsedData, setParsedData] = useState<ParsedIntakeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [qaIndex, setQaIndex] = useState<number | null>(null);
   const [modalPreview, setModalPreview] = useState<{ type: 'image' | 'text', content: string, name: string } | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -115,7 +117,8 @@ const BatchIntake: React.FC = () => {
       referralSource: getString(entry, ['referralSource']),
       notes: getString(entry, ['notes']),
       sourceFileName,
-      sourceImageDataUrl
+      sourceImageDataUrl,
+      qaApproved: true
     };
   };
 
@@ -165,6 +168,7 @@ const BatchIntake: React.FC = () => {
     setPreviews({});
     setError(null);
     setImportResult(null);
+    setQaIndex(null);
     setProgress({ current: 0, total: 0 });
   };
 
@@ -256,6 +260,7 @@ const BatchIntake: React.FC = () => {
 
       if (allData.length > 0) {
         setParsedData(allData);
+        setQaIndex(0);
         setStep(2);
       } else {
         throw new Error("No valid data found. Check console for rate limit errors or ensure images are legible.");
@@ -280,8 +285,16 @@ const BatchIntake: React.FC = () => {
     return match ? Number(match[0]) : 0;
   };
 
+  const updateRow = (index: number, updates: Partial<ParsedIntakeRow>) => {
+    setParsedData((prev) => prev.map((row, i) => (i === index ? { ...row, ...updates } : row)));
+  };
+
   const importToCRM = () => {
-    if (!parsedData.length) return;
+    const rowsToImport = parsedData.filter((row) => row.qaApproved !== false);
+    if (!rowsToImport.length) {
+      setError('No QA-approved rows to import. Mark at least one row as approved.');
+      return;
+    }
 
     let existingClients: Client[] = [];
     try {
@@ -296,7 +309,7 @@ const BatchIntake: React.FC = () => {
 
     let imported = 0;
 
-    for (const row of parsedData) {
+    for (const row of rowsToImport) {
       const clientName = row.clientName || `${row.ownerFirstName} ${row.ownerLastName}`.trim() || 'Unknown Client';
       const keyPhone = row.phoneNumber || row.cellPhone || row.homePhone;
       const existingIndex = existingClients.findIndex(
@@ -354,7 +367,7 @@ const BatchIntake: React.FC = () => {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(existingClients));
-    setImportResult(`Imported ${imported} records into Client CRM.`);
+    setImportResult(`Imported ${imported} QA-approved records into Client CRM.`);
   };
 
   return (
@@ -485,6 +498,12 @@ const BatchIntake: React.FC = () => {
               </div>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => setQaIndex(qaIndex ?? 0)}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+              >
+                Open QA View
+              </button>
               <button 
                 onClick={resetAll} 
                 className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-2"
@@ -515,6 +534,7 @@ const BatchIntake: React.FC = () => {
                   <th className="px-6 py-4">Breed</th>
                   <th className="px-6 py-4">Phone</th>
                   <th className="px-6 py-4">Vitals</th>
+                  <th className="px-6 py-4">QA</th>
                   <th className="px-6 py-4">Notes</th>
                 </tr>
               </thead>
@@ -535,13 +555,31 @@ const BatchIntake: React.FC = () => {
                       <div>Sex: {row.petSex || 'N/A'} | Age: {row.petAge || 'N/A'}</div>
                       <div>Wt: {row.petWeight || 'N/A'} | Color: {row.petColor || 'N/A'}</div>
                     </td>
+                    <td className="px-6 py-4 text-xs">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setQaIndex(idx)}
+                          className="px-2 py-1 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold"
+                        >
+                          Review
+                        </button>
+                        <label className="inline-flex items-center gap-1 text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={row.qaApproved !== false}
+                            onChange={(e) => updateRow(idx, { qaApproved: e.target.checked })}
+                          />
+                          Ready
+                        </label>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-slate-500 max-w-xs truncate" title={row.notes || row.medicalIssues}>
                       {row.notes || row.medicalIssues || row.groomingNotes || "-"}
                     </td>
                   </tr>
                 )) : (
                    <tr>
-                     <td colSpan={6} className="p-12 text-center text-slate-400">
+                     <td colSpan={7} className="p-12 text-center text-slate-400">
                        <div className="flex flex-col items-center gap-2">
                          <AlertCircle size={24} />
                          <span>No valid data found in file.</span>
@@ -552,6 +590,104 @@ const BatchIntake: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {qaIndex !== null && parsedData[qaIndex] && (
+            <div className="m-6 border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="font-semibold text-slate-800">Intake QA View</div>
+                <div className="flex items-center gap-2 text-sm">
+                  <button
+                    onClick={() => setQaIndex((prev) => (prev && prev > 0 ? prev - 1 : 0))}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-slate-600">Row {qaIndex + 1} / {parsedData.length}</span>
+                  <button
+                    onClick={() => setQaIndex((prev) => (prev !== null && prev < parsedData.length - 1 ? prev + 1 : prev))}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setQaIndex(null)}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2">
+                <div className="p-4 border-r border-slate-200 bg-slate-50 min-h-[420px] flex items-center justify-center">
+                  {parsedData[qaIndex].sourceImageDataUrl ? (
+                    <img
+                      src={parsedData[qaIndex].sourceImageDataUrl}
+                      alt={parsedData[qaIndex].sourceFileName || 'Source card'}
+                      className="max-w-full max-h-[520px] rounded-lg border border-slate-200 bg-white"
+                    />
+                  ) : (
+                    <div className="text-sm text-slate-500 text-center">
+                      No source image attached for this row.
+                      <div className="mt-1 text-xs">{parsedData[qaIndex].sourceFileName || ''}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 space-y-3 max-h-[620px] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Owner First Name" value={parsedData[qaIndex].ownerFirstName} onChange={(e) => updateRow(qaIndex, { ownerFirstName: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Owner Last Name" value={parsedData[qaIndex].ownerLastName} onChange={(e) => updateRow(qaIndex, { ownerLastName: e.target.value })} />
+                  </div>
+                  <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Client Name" value={parsedData[qaIndex].clientName} onChange={(e) => updateRow(qaIndex, { clientName: e.target.value })} />
+                  <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Address" value={parsedData[qaIndex].address} onChange={(e) => updateRow(qaIndex, { address: e.target.value })} />
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Primary Phone" value={parsedData[qaIndex].phoneNumber} onChange={(e) => updateRow(qaIndex, { phoneNumber: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Home Phone" value={parsedData[qaIndex].homePhone} onChange={(e) => updateRow(qaIndex, { homePhone: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Cell Phone" value={parsedData[qaIndex].cellPhone} onChange={(e) => updateRow(qaIndex, { cellPhone: e.target.value })} />
+                  </div>
+                  <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Email" value={parsedData[qaIndex].email} onChange={(e) => updateRow(qaIndex, { email: e.target.value })} />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Pet Name" value={parsedData[qaIndex].petName} onChange={(e) => updateRow(qaIndex, { petName: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Breed" value={parsedData[qaIndex].petBreed} onChange={(e) => updateRow(qaIndex, { petBreed: e.target.value })} />
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Sex" value={parsedData[qaIndex].petSex} onChange={(e) => updateRow(qaIndex, { petSex: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Age" value={parsedData[qaIndex].petAge} onChange={(e) => updateRow(qaIndex, { petAge: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Weight" value={parsedData[qaIndex].petWeight} onChange={(e) => updateRow(qaIndex, { petWeight: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Color" value={parsedData[qaIndex].petColor} onChange={(e) => updateRow(qaIndex, { petColor: e.target.value })} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Allergies" value={parsedData[qaIndex].allergies} onChange={(e) => updateRow(qaIndex, { allergies: e.target.value })} />
+                    <input className="px-3 py-2 border rounded-lg text-sm" placeholder="Vet Info" value={parsedData[qaIndex].vetInfo} onChange={(e) => updateRow(qaIndex, { vetInfo: e.target.value })} />
+                  </div>
+                  <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Temperament (comma-separated)" value={parsedData[qaIndex].temperament.join(', ')} onChange={(e) => updateRow(qaIndex, { temperament: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })} />
+                  <textarea className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} placeholder="Medical Issues" value={parsedData[qaIndex].medicalIssues} onChange={(e) => updateRow(qaIndex, { medicalIssues: e.target.value })} />
+                  <textarea className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} placeholder="Grooming Notes" value={parsedData[qaIndex].groomingNotes} onChange={(e) => updateRow(qaIndex, { groomingNotes: e.target.value })} />
+                  <input className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Referral Source" value={parsedData[qaIndex].referralSource} onChange={(e) => updateRow(qaIndex, { referralSource: e.target.value })} />
+                  <textarea className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} placeholder="General Notes" value={parsedData[qaIndex].notes} onChange={(e) => updateRow(qaIndex, { notes: e.target.value })} />
+
+                  <div className="flex items-center gap-6 text-sm">
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={parsedData[qaIndex].spayedNeutered} onChange={(e) => updateRow(qaIndex, { spayedNeutered: e.target.checked })} />
+                      Spayed/Neutered
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={parsedData[qaIndex].vaccinationsCurrent} onChange={(e) => updateRow(qaIndex, { vaccinationsCurrent: e.target.checked })} />
+                      Vaccinations Current
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={parsedData[qaIndex].qaApproved !== false} onChange={(e) => updateRow(qaIndex, { qaApproved: e.target.checked })} />
+                      QA Approved
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
