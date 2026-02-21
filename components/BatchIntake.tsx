@@ -1,20 +1,122 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, Check, AlertCircle, Loader2, ArrowRight, RefreshCw, Download, ScanLine, Image as ImageIcon, X, Plus, Eye } from 'lucide-react';
 import { processBatchIntake, processBatchIntakeImage } from '../services/geminiService';
+import { Client, Pet } from '../types';
+
+interface ParsedIntakeRow {
+  ownerFirstName: string;
+  ownerLastName: string;
+  clientName: string;
+  address: string;
+  phoneNumber: string;
+  homePhone: string;
+  cellPhone: string;
+  email: string;
+  petName: string;
+  petBreed: string;
+  petSex: string;
+  petAge: string;
+  petWeight: string;
+  petColor: string;
+  allergies: string;
+  spayedNeutered: boolean;
+  vaccinationsCurrent: boolean;
+  vetInfo: string;
+  medicalIssues: string;
+  temperament: string[];
+  groomingNotes: string;
+  referralSource: string;
+  notes: string;
+  sourceFileName?: string;
+  sourceImageDataUrl?: string;
+}
+
+const STORAGE_KEY = 'pawcrm_clients';
 
 const BatchIntake: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
-  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [parsedData, setParsedData] = useState<ParsedIntakeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<string | null>(null);
   const [modalPreview, setModalPreview] = useState<{ type: 'image' | 'text', content: string, name: string } | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isImageFile = (file: File) => {
     return file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
+  };
+
+  const getString = (entry: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = entry[key];
+      if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+    }
+    return '';
+  };
+
+  const getBoolean = (entry: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = entry[key];
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['yes', 'true', 'checked', 'x'].includes(normalized)) return true;
+        if (['no', 'false', 'unchecked'].includes(normalized)) return false;
+      }
+    }
+    return false;
+  };
+
+  const getStringArray = (entry: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = entry[key];
+      if (Array.isArray(value)) {
+        return value.filter((v) => typeof v === 'string' && v.trim().length > 0).map((v) => (v as string).trim());
+      }
+      if (typeof value === 'string' && value.trim()) {
+        return value.split(',').map((v) => v.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
+  const normalizeRow = (entry: Record<string, unknown>, sourceFileName: string, sourceImageDataUrl?: string): ParsedIntakeRow => {
+    const ownerFirstName = getString(entry, ['ownerFirstName', 'firstName']);
+    const ownerLastName = getString(entry, ['ownerLastName', 'lastName']);
+    const clientName = getString(entry, ['clientName', 'ownerName']) || `${ownerFirstName} ${ownerLastName}`.trim();
+    const homePhone = getString(entry, ['homePhone']);
+    const cellPhone = getString(entry, ['cellPhone', 'phoneNumber']);
+
+    return {
+      ownerFirstName,
+      ownerLastName,
+      clientName,
+      address: getString(entry, ['address']),
+      phoneNumber: getString(entry, ['phoneNumber']) || cellPhone || homePhone,
+      homePhone,
+      cellPhone,
+      email: getString(entry, ['email']),
+      petName: getString(entry, ['petName']),
+      petBreed: getString(entry, ['petBreed', 'breed']),
+      petSex: getString(entry, ['petSex', 'sex']),
+      petAge: getString(entry, ['petAge', 'age']),
+      petWeight: getString(entry, ['petWeight', 'weight']),
+      petColor: getString(entry, ['petColor', 'color']),
+      allergies: getString(entry, ['allergies']),
+      spayedNeutered: getBoolean(entry, ['spayedNeutered']),
+      vaccinationsCurrent: getBoolean(entry, ['vaccinationsCurrent']),
+      vetInfo: getString(entry, ['vetInfo']),
+      medicalIssues: getString(entry, ['medicalIssues']),
+      temperament: getStringArray(entry, ['temperament']),
+      groomingNotes: getString(entry, ['groomingNotes']),
+      referralSource: getString(entry, ['referralSource']),
+      notes: getString(entry, ['notes']),
+      sourceFileName,
+      sourceImageDataUrl
+    };
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,6 +164,7 @@ const BatchIntake: React.FC = () => {
     setFiles([]);
     setPreviews({});
     setError(null);
+    setImportResult(null);
     setProgress({ current: 0, total: 0 });
   };
 
@@ -86,11 +189,12 @@ const BatchIntake: React.FC = () => {
     if (files.length === 0) return;
     setProcessing(true);
     setError(null);
+    setImportResult(null);
     setParsedData([]);
     setProgress({ current: 0, total: files.length });
 
     try {
-      const allData: any[] = [];
+      const allData: ParsedIntakeRow[] = [];
       
       // Process files sequentially to avoid Rate Limiting (429 Errors)
       for (let i = 0; i < files.length; i++) {
@@ -129,7 +233,16 @@ const BatchIntake: React.FC = () => {
             const data = JSON.parse(cleanJson);
             
             if (Array.isArray(data)) {
-                allData.push(...data);
+                const normalizedRows = data
+                  .filter((entry) => entry && typeof entry === 'object')
+                  .map((entry) =>
+                    normalizeRow(
+                      entry as Record<string, unknown>,
+                      file.name,
+                      isImageFile(file) ? previews[file.name] : undefined
+                    )
+                  );
+                allData.push(...normalizedRows);
             }
         } catch (e: any) {
             const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
@@ -154,6 +267,94 @@ const BatchIntake: React.FC = () => {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const parseGender = (sex: string): 'Male' | 'Female' => {
+    const normalized = sex.trim().toLowerCase();
+    if (normalized === 'f' || normalized === 'female') return 'Female';
+    return 'Male';
+  };
+
+  const parseAge = (ageText: string) => {
+    const match = ageText.match(/\d+/);
+    return match ? Number(match[0]) : 0;
+  };
+
+  const importToCRM = () => {
+    if (!parsedData.length) return;
+
+    let existingClients: Client[] = [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) existingClients = parsed as Client[];
+      }
+    } catch (e) {
+      console.error('Failed loading existing clients', e);
+    }
+
+    let imported = 0;
+
+    for (const row of parsedData) {
+      const clientName = row.clientName || `${row.ownerFirstName} ${row.ownerLastName}`.trim() || 'Unknown Client';
+      const keyPhone = row.phoneNumber || row.cellPhone || row.homePhone;
+      const existingIndex = existingClients.findIndex(
+        (c) =>
+          c.name.toLowerCase() === clientName.toLowerCase() &&
+          (keyPhone ? c.phone === keyPhone : true)
+      );
+
+      const pet: Pet = {
+        id: `pet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: row.petName || 'Unknown Pet',
+        breed: row.petBreed || 'Unknown',
+        age: parseAge(row.petAge),
+        gender: parseGender(row.petSex),
+        weight: row.petWeight || 'N/A',
+        color: row.petColor || '',
+        allergies: row.allergies || '',
+        spayedNeutered: row.spayedNeutered,
+        vaccinationsCurrent: row.vaccinationsCurrent,
+        vetInfo: row.vetInfo || '',
+        temperament: row.temperament || [],
+        groomingNotes: row.groomingNotes || '',
+        medicalNotes: row.medicalIssues || row.notes || '',
+        avatarUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=100&h=100&fit=crop'
+      };
+
+      if (existingIndex >= 0) {
+        const client = existingClients[existingIndex];
+        const petExists = client.pets.some((p) => p.name.toLowerCase() === pet.name.toLowerCase());
+        if (!petExists) {
+          existingClients[existingIndex] = { ...client, pets: [...client.pets, pet] };
+          imported += 1;
+        }
+      } else {
+        const newClient: Client = {
+          id: `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          name: clientName,
+          firstName: row.ownerFirstName || '',
+          lastName: row.ownerLastName || '',
+          email: row.email || '',
+          phone: keyPhone || '',
+          homePhone: row.homePhone || '',
+          cellPhone: row.cellPhone || '',
+          address: row.address || '',
+          joinDate: new Date().toISOString().split('T')[0],
+          status: 'Active',
+          referralSource: row.referralSource || '',
+          notes: row.notes || row.groomingNotes || '',
+          pets: [pet],
+          originalCardUrl: row.sourceImageDataUrl
+        };
+        existingClients.push(newClient);
+        imported += 1;
+      }
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(existingClients));
+    setImportResult(`Imported ${imported} records into Client CRM.`);
   };
 
   return (
@@ -290,11 +491,20 @@ const BatchIntake: React.FC = () => {
               >
                 <RefreshCw size={16} /> Start Over
               </button>
-              <button className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 flex items-center gap-2 font-bold transition-all hover:-translate-y-0.5">
+              <button
+                onClick={importToCRM}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 flex items-center gap-2 font-bold transition-all hover:-translate-y-0.5"
+              >
                 <Check size={18} /> Import to CRM
               </button>
             </div>
           </div>
+
+          {importResult && (
+            <div className="mx-6 mt-4 p-3 rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-700 text-sm font-medium">
+              {importResult}
+            </div>
+          )}
           
           <div className="overflow-x-auto max-h-[600px]">
             <table className="w-full text-left text-sm text-slate-600">
@@ -304,6 +514,7 @@ const BatchIntake: React.FC = () => {
                   <th className="px-6 py-4">Pet Name</th>
                   <th className="px-6 py-4">Breed</th>
                   <th className="px-6 py-4">Phone</th>
+                  <th className="px-6 py-4">Vitals</th>
                   <th className="px-6 py-4">Notes</th>
                 </tr>
               </thead>
@@ -320,11 +531,17 @@ const BatchIntake: React.FC = () => {
                       ) : <span className="text-slate-300 italic">Unknown</span>}
                     </td>
                     <td className="px-6 py-4 font-mono text-xs">{row.phoneNumber || "N/A"}</td>
-                    <td className="px-6 py-4 text-slate-500 max-w-xs truncate" title={row.notes}>{row.notes || "-"}</td>
+                    <td className="px-6 py-4 text-xs">
+                      <div>Sex: {row.petSex || 'N/A'} | Age: {row.petAge || 'N/A'}</div>
+                      <div>Wt: {row.petWeight || 'N/A'} | Color: {row.petColor || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 max-w-xs truncate" title={row.notes || row.medicalIssues}>
+                      {row.notes || row.medicalIssues || row.groomingNotes || "-"}
+                    </td>
                   </tr>
                 )) : (
                    <tr>
-                     <td colSpan={5} className="p-12 text-center text-slate-400">
+                     <td colSpan={6} className="p-12 text-center text-slate-400">
                        <div className="flex flex-col items-center gap-2">
                          <AlertCircle size={24} />
                          <span>No valid data found in file.</span>

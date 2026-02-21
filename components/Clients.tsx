@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Plus, Phone, Mail, MapPin, MoreHorizontal, Filter, X, PawPrint, DollarSign, Calendar, ScanLine, FileText, Image as ImageIcon, Save, Dog, Scale, Syringe, Sparkles, Loader2, MessageSquare } from 'lucide-react';
 import { Client, Pet, AppView } from '../types';
 import { generateClientFollowUp } from '../services/geminiService';
@@ -87,6 +87,8 @@ interface ClientsProps {
   onNavigate?: (view: AppView) => void;
 }
 
+const STORAGE_KEY = 'pawcrm_clients';
+
 const Clients: React.FC<ClientsProps> = ({ onNavigate }) => {
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,6 +109,19 @@ const Clients: React.FC<ClientsProps> = ({ onNavigate }) => {
     weight: '',
     medicalNotes: ''
   });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setClients(parsed as Client[]);
+      }
+    } catch (e) {
+      console.error('Failed to load saved clients', e);
+    }
+  }, []);
 
   const filteredClients = clients.filter(client => 
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -139,6 +154,7 @@ const Clients: React.FC<ClientsProps> = ({ onNavigate }) => {
     });
 
     setClients(updatedClients);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedClients));
     // Update currently selected client to reflect changes immediately
     setSelectedClient({ ...selectedClient, pets: [...selectedClient.pets, newPetRecord] });
     

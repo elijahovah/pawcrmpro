@@ -37,13 +37,17 @@ export const processBatchIntake = async (fileContent: string): Promise<string> =
         parts: [
           {
             text: `You are an expert data entry AI. 
-            Analyze the following raw text data which represents a list of clients and their pets. 
-            Extract the data and format it into a valid JSON array. 
+            Analyze the following raw text data from pet grooming intake cards. 
+            Extract each client+pet profile and return a valid JSON array.
             
             RAW DATA:
             ${fileContent}
             
-            Strictly follow the schema.`
+            Rules:
+            - Use empty strings for missing text fields.
+            - Use false for unknown checkbox booleans.
+            - Do not add markdown or commentary.
+            - Strictly follow the schema.`
           }
         ]
       },
@@ -54,11 +58,32 @@ export const processBatchIntake = async (fileContent: string): Promise<string> =
           items: {
             type: Type.OBJECT,
             properties: {
+              ownerFirstName: { type: Type.STRING },
+              ownerLastName: { type: Type.STRING },
               clientName: { type: Type.STRING },
+              address: { type: Type.STRING },
               phoneNumber: { type: Type.STRING },
+              homePhone: { type: Type.STRING },
+              cellPhone: { type: Type.STRING },
+              email: { type: Type.STRING },
               petName: { type: Type.STRING },
               petBreed: { type: Type.STRING },
-              notes: { type: Type.STRING },
+              petSex: { type: Type.STRING },
+              petAge: { type: Type.STRING },
+              petWeight: { type: Type.STRING },
+              petColor: { type: Type.STRING },
+              allergies: { type: Type.STRING },
+              spayedNeutered: { type: Type.BOOLEAN },
+              vaccinationsCurrent: { type: Type.BOOLEAN },
+              vetInfo: { type: Type.STRING },
+              medicalIssues: { type: Type.STRING },
+              temperament: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              groomingNotes: { type: Type.STRING },
+              referralSource: { type: Type.STRING },
+              notes: { type: Type.STRING }
             },
             required: ["clientName", "petName"]
           },
@@ -88,19 +113,36 @@ export const processBatchIntakeImage = async (base64Image: string, mimeType: str
                       }
                   },
                   {
-                      text: `Perform OCR on this handwritten client intake document or business card.
-                      Extract all legible client and pet information.
-                      
-                      Fields to look for:
-                      - Client Name (Owner)
-                      - Phone Number
-                      - Pet Name
-                      - Breed
-                      - Notes (Medical, Behavior, or Grooming Instructions)
-                      
-                      Return a JSON array of objects.
-                      If a field is illegible or missing, use an empty string.
-                      Do not return markdown, just the JSON.`
+                      text: `Perform OCR on this handwritten pet grooming intake card and extract all legible profile fields.
+                      Return ONLY a JSON array of objects using this exact schema:
+                      - ownerFirstName (string)
+                      - ownerLastName (string)
+                      - clientName (string, combine owner names if needed)
+                      - address (string)
+                      - phoneNumber (string, best primary)
+                      - homePhone (string)
+                      - cellPhone (string)
+                      - email (string)
+                      - petName (string)
+                      - petBreed (string)
+                      - petSex (string, e.g. M/F/Male/Female)
+                      - petAge (string)
+                      - petWeight (string)
+                      - petColor (string)
+                      - allergies (string)
+                      - spayedNeutered (boolean)
+                      - vaccinationsCurrent (boolean)
+                      - vetInfo (string)
+                      - medicalIssues (string)
+                      - temperament (string[] from checkboxes like Easy/Fair/Difficult/Shy/Hyper/Noisy/Blind/Deaf/Diabetic/Other)
+                      - groomingNotes (string)
+                      - referralSource (string from location/social media/referral/other)
+                      - notes (string, concise summary)
+
+                      Rules:
+                      - Use empty strings for unknown text.
+                      - Use false for unknown booleans.
+                      - Do not return markdown, explanations, or extra keys.`
                   }
               ]
           },
@@ -111,13 +153,33 @@ export const processBatchIntakeImage = async (base64Image: string, mimeType: str
                   items: {
                     type: Type.OBJECT,
                     properties: {
+                      ownerFirstName: { type: Type.STRING },
+                      ownerLastName: { type: Type.STRING },
                       clientName: { type: Type.STRING },
+                      address: { type: Type.STRING },
                       phoneNumber: { type: Type.STRING },
+                      homePhone: { type: Type.STRING },
+                      cellPhone: { type: Type.STRING },
+                      email: { type: Type.STRING },
                       petName: { type: Type.STRING },
                       petBreed: { type: Type.STRING },
-                      notes: { type: Type.STRING },
+                      petSex: { type: Type.STRING },
+                      petAge: { type: Type.STRING },
+                      petWeight: { type: Type.STRING },
+                      petColor: { type: Type.STRING },
+                      allergies: { type: Type.STRING },
+                      spayedNeutered: { type: Type.BOOLEAN },
+                      vaccinationsCurrent: { type: Type.BOOLEAN },
+                      vetInfo: { type: Type.STRING },
+                      medicalIssues: { type: Type.STRING },
+                      temperament: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                      },
+                      groomingNotes: { type: Type.STRING },
+                      referralSource: { type: Type.STRING },
+                      notes: { type: Type.STRING }
                     },
-                    // We remove strict requirements to allow partial extraction from messy handwriting
                   },
               },
           }

@@ -86,6 +86,13 @@ export interface Pet {
   age: number;
   gender: 'Male' | 'Female';
   weight: string;
+  color?: string;
+  allergies?: string;
+  spayedNeutered?: boolean;
+  vaccinationsCurrent?: boolean;
+  vetInfo?: string;
+  temperament?: string[];
+  groomingNotes?: string;
   medicalNotes: string;
   avatarUrl: string;
 }
@@ -93,11 +100,16 @@ export interface Pet {
 export interface Client {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
+  homePhone?: string;
+  cellPhone?: string;
   address: string;
   joinDate: string;
   status: 'Active' | 'Inactive';
+  referralSource?: string;
   notes: string;
   pets: Pet[];
   lastVisit?: string;
