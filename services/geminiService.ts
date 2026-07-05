@@ -93,7 +93,8 @@ export const processBatchIntake = async (fileContent: string): Promise<string> =
     return response.text || "[]";
   } catch (error) {
     console.error("Batch Intake Error:", error);
-    throw new Error("Failed to process file with AI.");
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to process file with AI: ${detail}`);
   }
 };
 

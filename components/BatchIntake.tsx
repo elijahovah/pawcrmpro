@@ -51,6 +51,32 @@ const BatchIntake: React.FC = () => {
     return file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name);
   };
 
+  // localStorage holds ~5MB total; raw phone photos as base64 data URLs blow past
+  // that, so card images must be downscaled before they are persisted.
+  const compressImageDataUrl = (dataUrl: string, maxDim = 1000, quality = 0.72): Promise<string> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
   const getString = (entry: Record<string, unknown>, keys: string[]) => {
     for (const key of keys) {
       const value = entry[key];
@@ -199,7 +225,8 @@ const BatchIntake: React.FC = () => {
 
     try {
       const allData: ParsedIntakeRow[] = [];
-      
+      const fileErrors: string[] = [];
+
       // Process files sequentially to avoid Rate Limiting (429 Errors)
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -251,6 +278,7 @@ const BatchIntake: React.FC = () => {
         } catch (e: any) {
             const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
             console.error(`Error processing file ${file.name}:`, errorMessage);
+            fileErrors.push(`${file.name}: ${errorMessage}`);
             // We continue processing other files even if one fails
         }
         
@@ -263,7 +291,8 @@ const BatchIntake: React.FC = () => {
         setQaIndex(0);
         setStep(2);
       } else {
-        throw new Error("No valid data found. Check console for rate limit errors or ensure images are legible.");
+        const detail = fileErrors.length > 0 ? ` (${fileErrors[0]})` : '';
+        throw new Error(`No valid data found${detail}. Ensure images are legible and the Gemini API key is configured.`);
       }
 
     } catch (err: any) {
@@ -289,7 +318,8 @@ const BatchIntake: React.FC = () => {
     setParsedData((prev) => prev.map((row, i) => (i === index ? { ...row, ...updates } : row)));
   };
 
-  const importToCRM = () => {
+  const importToCRM = async () => {
+    setError(null);
     const rowsToImport = parsedData.filter((row) => row.qaApproved !== false);
     if (!rowsToImport.length) {
       setError('No QA-approved rows to import. Mark at least one row as approved.');
@@ -308,6 +338,7 @@ const BatchIntake: React.FC = () => {
     }
 
     let imported = 0;
+    const importedClientIds = new Set<string>();
 
     for (const row of rowsToImport) {
       const clientName = row.clientName || `${row.ownerFirstName} ${row.ownerLastName}`.trim() || 'Unknown Client';
@@ -360,13 +391,33 @@ const BatchIntake: React.FC = () => {
           notes: row.notes || row.groomingNotes || '',
           pets: [pet],
           originalCardUrl: row.sourceImageDataUrl
+            ? await compressImageDataUrl(row.sourceImageDataUrl)
+            : undefined
         };
         existingClients.push(newClient);
+        importedClientIds.add(newClient.id);
         imported += 1;
       }
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existingClients));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(existingClients));
+    } catch (e) {
+      // Quota exceeded — retry without the card photos on the new records
+      console.error('Saving clients failed, retrying without card images', e);
+      const stripped = existingClients.map((c) =>
+        importedClientIds.has(c.id) ? { ...c, originalCardUrl: undefined } : c
+      );
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped));
+        setImportResult(`Imported ${imported} records. Card photos were too large for browser storage and were not saved.`);
+        return;
+      } catch (e2) {
+        console.error('Saving clients failed even without images', e2);
+        setError('Import failed: browser storage is full. Remove some saved clients or clear old data, then try again.');
+        return;
+      }
+    }
     setImportResult(`Imported ${imported} QA-approved records into Client CRM.`);
   };
 
